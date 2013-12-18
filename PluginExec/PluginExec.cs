@@ -18,11 +18,14 @@ namespace PluginExec
 {
     internal class Measure
     {
-        // TODOs: dump to file and max lines settings
-        // TODO: should update be irrelevant?
+        // TODO: max lines settings
+        // TODO: can we use async to keep rm from hanging while the process is executing? Probably, BUT it's > VS 2012 only :(
         internal StringBuilder outputStr;
+        // measure settings
         internal string ExecFile;
         internal string Arguments;
+        internal bool writeOut;
+        internal string outPath;
 
         internal Measure()
         {
@@ -31,34 +34,73 @@ namespace PluginExec
 
         internal void Reload(Rainmeter.API rm, ref double maxValue)
         {
+            // two basic options: what to run and arguments
             ExecFile = rm.ReadString("ExecFile", "");
             Arguments = rm.ReadString("Arguments", "");
+            // we would like to try to write the output to a file, so we can parse it, etc.
+            outPath = rm.ReadPath("WriteToFile", null);
+            if (outPath.Equals(null))  // do not write output to a file
+            {
+                writeOut = false;
+            }
+            else    // try to write to a file
+            {
+                try
+                {
+                    if (!File.Exists(outPath))
+                    {
+                        // create the file and close the FileStream, just to check for errors
+                        File.Create(outPath).Close();   
+                    }
+                    writeOut = true;
+                }
+                catch (Exception ex)
+                {
+                    writeOut = false;
+                    outPath = null;
+                    Rainmeter.API.Log(API.LogType.Error, "Exec: " + ex.Message);
+                }
+            }
         }
 
+        // it would be nice to methodize the contents of update so that an execution could be triggered by a !CommandMeasure bang
         internal double Update()
         {
-            ProcessStartInfo procinfo = makepsi();
             int lines = 0;
+            Process proc = null;
+            StreamReader outstream = null;
             try
             {
-                using (Process proc = Process.Start(procinfo))
+                proc = Process.Start(makepsi());
+                outstream = proc.StandardOutput;
+                while (!outstream.EndOfStream)
                 {
-                    using (StreamReader outstream = proc.StandardOutput)
-                    {
-                        while (!outstream.EndOfStream)
-                        {
-                            outputStr.AppendLine(outstream.ReadLine());
-                            lines++;
-                        }
-                    }
+                    outputStr.AppendLine(outstream.ReadLine());
+                    lines++;
                 }
             }
             catch (Exception ex)
             {
                 outputStr.AppendLine(ex.Message);
             }
+            finally // always close, even if there is an exception...
+            {
+                if (proc != null)
+                {
+                    proc.Close();
+                }
+                if (outstream != null)
+                {
+                    outstream.Close();
+                }
+            }
 
-            return 1.0;
+            if (writeOut)   // conditional attempt to write to a file
+            {
+                bool worked = writeToFile();
+            }
+
+            return (double)lines;   // might as well
         }
 
         internal string GetString()
@@ -73,7 +115,7 @@ namespace PluginExec
         private ProcessStartInfo makepsi()
         {
             ProcessStartInfo psi = new ProcessStartInfo();
-            psi.UseShellExecute = false;
+            psi.UseShellExecute = false;    // must be false to redirect standard output
             psi.CreateNoWindow = true;
             psi.ErrorDialog = true;
             psi.RedirectStandardOutput = true;
@@ -84,8 +126,31 @@ namespace PluginExec
             return psi;
         }
 
+        private bool writeToFile()
+        {
+            StreamWriter writer = null;
+            try
+            {
+                using (writer = new StreamWriter(outPath))
+                {
+                    writer.Write(outputStr);
+                }
+                writer.Close();
+            }
+            catch (Exception)
+            {
+                if (writer != null)
+                {
+                    writer.Close();
+                }
+                return false;
+            }
+            return true;
+        }
+
     }
 
+    /* Plugin class binds 'Measure' methods from above to the plugin API */
     public static class Plugin
     {
         [DllExport]
