@@ -35,10 +35,12 @@ namespace PluginExec
 #if DEBUG
             API.Log(API.LogType.Notice, "Read settings, spawing thread");
 #endif
+            // This is needed for firstrun.
             if (procThread == null)
             {
                 SpawnProcThread();
             }
+            // Yet we check if thread is already running
             else if (!procThread.IsAlive)
             {
                 SpawnProcThread();
