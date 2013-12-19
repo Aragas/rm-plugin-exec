@@ -4,32 +4,27 @@ using System.Diagnostics;
 using System.IO;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
+using System.Threading;
 using Rainmeter;
 
-// Overview: This is a blank canvas on which to build your plugin.
-
-// Note: Measure.GetString, Plugin.GetString, Measure.ExecuteBang, and
-// Plugin.ExecuteBang have been commented out. If you need GetString
-// and/or ExecuteBang and you have read what they are used for from the
-// SDK docs, uncomment the function(s). Otherwise leave them commented out
-// (or get rid of them)!
-
+// TODO: asynchronous stdout and file write, so that (maybe) Rainmeter won't hang when you execute a long command
+// STAHP THE THREAD.  (Yikes.)  We need to spawn a thread once on refresh and anytime on demand, BUT
+// whenever we start a thread we MUST somehow terminate the old one, so that multiple threads aren't writing to the output string. (!)
 namespace PluginExec
 {
     internal class Measure
     {
-        // TODO: max lines settings
-        // TODO: can we use async to keep rm from hanging while the process is executing? Probably, BUT it's > VS 2012 only :(
-        internal StringBuilder outputStr;
+        private static StringBuilder outputStr = new StringBuilder();
+        private static readonly object locker = new object();  // locker for shared static field outputStr
         // measure settings
         internal string ExecFile;
         internal string Arguments;
-        internal bool writeOut;
         internal string outPath;
+        // instance reference to a secondary thread (get rid of this.  Geez.)
+        private Thread procThread = null;
 
         internal Measure()
         {
-            outputStr = new StringBuilder();
         }
 
         internal void Reload(Rainmeter.API rm, ref double maxValue)
@@ -38,114 +33,80 @@ namespace PluginExec
             ExecFile = rm.ReadString("ExecFile", "");
             Arguments = rm.ReadString("Arguments", "");
             // we would like to try to write the output to a file, so we can parse it, etc.
-            outPath = rm.ReadPath("WriteToFile", null);
-            if (outPath.Equals(null))  // do not write output to a file
-            {
-                writeOut = false;
-            }
-            else    // try to write to a file
-            {
-                try
-                {
-                    if (!File.Exists(outPath))
-                    {
-                        // create the file and close the FileStream, just to check for errors
-                        File.Create(outPath).Close();   
-                    }
-                    writeOut = true;
-                }
-                catch (Exception ex)
-                {
-                    writeOut = false;
-                    outPath = null;
-                    Rainmeter.API.Log(API.LogType.Error, "Exec: " + ex.Message);
-                }
-            }
+            outPath = rm.ReadPath("WriteToFile", "");   // implement later
+#if DEBUG
+            Rainmeter.API.Log(Rainmeter.API.LogType.Notice, "Read settings, spawing thread");
+#endif
+            SpawnProcThread();
         }
 
-        // it would be nice to methodize the contents of update so that an execution could be triggered by a !CommandMeasure bang
+        /* this method doesn't actually do anything: we want the process to run only 
+         * on refresh or on request through a !CommandMeasure bang
+         * TODO: return running state of process: (Running ? 1 : 0)
+         */
         internal double Update()
         {
-            int lines = 0;
-            Process proc = null;
-            StreamReader outstream = null;
-            try
-            {
-                proc = Process.Start(makepsi());
-                outstream = proc.StandardOutput;
-                while (!outstream.EndOfStream)
-                {
-                    outputStr.AppendLine(outstream.ReadLine());
-                    lines++;
-                }
-            }
-            catch (Exception ex)
-            {
-                outputStr.AppendLine(ex.Message);
-            }
-            finally // always close, even if there is an exception...
-            {
-                if (proc != null)
-                {
-                    proc.Close();
-                }
-                if (outstream != null)
-                {
-                    outstream.Close();
-                }
-            }
-
-            if (writeOut)   // conditional attempt to write to a file
-            {
-                bool worked = writeToFile();
-            }
-
-            return (double)lines;   // might as well
+            return 1.0;
         }
 
         internal string GetString()
         {
-            return outputStr.ToString();
+            string t = "-1";
+            lock (locker)
+            {
+                t = Measure.outputStr.ToString();
+            }
+            return t;
         }
 
+        /* Will need this later */
         //internal void ExecuteBang(string args)
         //{
         //}
 
-        private ProcessStartInfo makepsi()
+        /* in theory, this will keep the main thread from hanging while we wait for the process to finish running.  
+         * ...Right? Yes. Sort of.
+         */
+        private void SpawnProcThread()
         {
-            ProcessStartInfo psi = new ProcessStartInfo();
-            psi.UseShellExecute = false;    // must be false to redirect standard output
-            psi.CreateNoWindow = true;
-            psi.ErrorDialog = true;
-            psi.RedirectStandardOutput = true;
-
-            psi.FileName = ExecFile;
-            psi.Arguments = Arguments;
-
-            return psi;
+            Measure.outputStr.Remove(0, outputStr.Length);
+            
+            procThread = new Thread(delegate()
+                {
+                    RunProc(ExecFile, Arguments);
+                });
+            procThread.Start();
+            
         }
 
-        private bool writeToFile()
+        /* Starts the process and waits for it to finish.  
+         * Redirects asynchronous stdout to an event handler that updates the static StringBuilder.
+         */
+        private void RunProc(string file, string args)
         {
-            StreamWriter writer = null;
-            try
+            Process proc = new Process();
+            // set properties
+            proc.StartInfo.UseShellExecute = false;
+            proc.StartInfo.RedirectStandardOutput = true;
+            proc.StartInfo.CreateNoWindow = true;
+            proc.StartInfo.FileName = file;
+            proc.StartInfo.Arguments = args;
+            // event handler for asynchronous output
+            proc.OutputDataReceived += new DataReceivedEventHandler(proc_OutputHandler);
+            proc.Start();   // start process
+            proc.BeginOutputReadLine(); // start asynch output
+            // finish
+            proc.WaitForExit();
+            proc.Close();
+        }
+
+        private void proc_OutputHandler(object sendingProcess, DataReceivedEventArgs outLine)
+        {
+            lock (locker)
             {
-                using (writer = new StreamWriter(outPath))
-                {
-                    writer.Write(outputStr);
-                }
-                writer.Close();
+                Measure.outputStr.AppendLine(outLine.Data);
             }
-            catch (Exception)
-            {
-                if (writer != null)
-                {
-                    writer.Close();
-                }
-                return false;
-            }
-            return true;
+            
         }
 
     }

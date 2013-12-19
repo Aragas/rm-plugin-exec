@@ -3,14 +3,11 @@ This is a plugin that will execute a command (as though through the Windows
 "Run" dialog) and return any output to standard output from that command as a Rainmeter string.
 Written for the learning experience in imitation of Conky's "exec" variable.
 
-##### Usage and Settings #####
-Ideally, the plugin would be distributed as part of a .rmskin package, in which case it should
-automatically be installed in the right place.  If not, for the time being you'll have to build
-it yourself from the code here on GitHub or download a prebuilt .dll from the the forums or something.
-In that case, it should go in your "Plugins" folder under the settings path for your Rainmeter 
-installation, as described here: http://docs.rainmeter.net/manual/plugins#Custom
+### DO NOT USE THIS PLUGIN ###
+I have no idea how to do multithreading.  Until I learn, this thing is an
+barely-functional mess that might eat your computer.  You have been warned.
 
-Example usage:
+Planned usage example (eventually, it will work like this)
 ```
 [Variables]
 prog="cmd"
@@ -33,5 +30,4 @@ Text=%1
 - `ExecFile` is the program to run.
 - `Arguments` are its arguments.
 - If `WriteToFile` is set to a vaild file path, then the plugin will also write its output to that file.
-- `UpdateDivider=-1` (or using the measure with a Lua script to turn it on and off) is **highly recommended**.  Otherwise the plugin will be running the command every time the the skin updates, which is obviously rather resource intensive.
-- At the moment, this thing is *slow* for any command that takes a a while to run or produces lots of output (think `tracert`).  *Expect* it to cause Rainmeter to hang while it works.  I'd like to try to make it asynchronous, but I have no experience with that, so that's a maybe.
+- ExecFile will be run once on refresh, or on demand using a !CommandMeasure bang.
