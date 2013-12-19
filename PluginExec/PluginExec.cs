@@ -35,7 +35,17 @@ namespace PluginExec
 #if DEBUG
             API.Log(API.LogType.Notice, "Read settings, spawing thread");
 #endif
-            SpawnProcThread();
+            if (procThread == null)
+            {
+                SpawnProcThread();
+            }
+            else
+            {
+                if (!procThread.IsAlive)
+                {
+                    SpawnProcThread();
+                }
+            }
         }
 
         /* this method doesn't actually do anything: we want the process to run only 
@@ -65,16 +75,17 @@ namespace PluginExec
         /* in theory, this will keep the main thread from hanging while we wait for the process to finish running.  
          * ...Right? Yes. Sort of.
          */
+
         private void SpawnProcThread()
         {
             outputStr.Remove(0, outputStr.Length);
-            
+
             procThread = new Thread(delegate()
-                {
-                    RunProc(ExecFile, Arguments);
-                });
+            {
+                RunProc(ExecFile, Arguments);
+            });
             procThread.Start();
-            
+
         }
 
         /* Starts the process and waits for it to finish.  
