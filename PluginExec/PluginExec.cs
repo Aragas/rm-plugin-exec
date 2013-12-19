@@ -39,12 +39,9 @@ namespace PluginExec
             {
                 SpawnProcThread();
             }
-            else
+            else if (!procThread.IsAlive)
             {
-                if (!procThread.IsAlive)
-                {
-                    SpawnProcThread();
-                }
+                SpawnProcThread();
             }
         }
 
