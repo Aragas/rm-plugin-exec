@@ -8,6 +8,7 @@ using Rainmeter;
 // TODO: asynchronous stdout and file write, so that (maybe) Rainmeter won't hang when you execute a long command
 // STAHP THE THREAD.  (Yikes.)  We need to spawn a thread once on refresh and anytime on demand, BUT
 // whenever we start a thread we MUST somehow terminate the old one, so that multiple threads aren't writing to the output string. (!)
+// (Aragas) Have removed redurant qualifers.
 namespace PluginExec
 {
     internal class Measure
@@ -19,7 +20,7 @@ namespace PluginExec
         internal string Arguments;
         internal string outPath;
         // instance reference to a secondary thread (get rid of this.  Geez.)
-        private Thread procThread;
+        private Thread procThread; // (Aragas) Don't use = null
 
         internal Measure()
         {
@@ -35,12 +36,12 @@ namespace PluginExec
 #if DEBUG
             API.Log(API.LogType.Notice, "Read settings, spawing thread");
 #endif
-            // This is needed for firstrun.
+            // (Aragas) This is needed for firstrun.
             if (procThread == null)
             {
                 SpawnProcThread();
             }
-            // Yet we check if thread is already running
+            // (Aragas) Yet we check if thread is already running
             else if (!procThread.IsAlive)
             {
                 SpawnProcThread();
