@@ -1,9 +1,7 @@
 ﻿using System;
 using System.Text;
 using System.Diagnostics;
-using System.IO;
 using System.Collections.Generic;
-using System.Runtime.InteropServices;
 using System.Threading;
 using Rainmeter;
 
@@ -21,13 +19,13 @@ namespace PluginExec
         internal string Arguments;
         internal string outPath;
         // instance reference to a secondary thread (get rid of this.  Geez.)
-        private Thread procThread = null;
+        private Thread procThread;
 
         internal Measure()
         {
         }
 
-        internal void Reload(Rainmeter.API rm, ref double maxValue)
+        internal void Reload(API rm, ref double maxValue)
         {
             // two basic options: what to run and arguments
             ExecFile = rm.ReadString("ExecFile", "");
@@ -35,7 +33,7 @@ namespace PluginExec
             // we would like to try to write the output to a file, so we can parse it, etc.
             outPath = rm.ReadPath("WriteToFile", "");   // implement later
 #if DEBUG
-            Rainmeter.API.Log(Rainmeter.API.LogType.Notice, "Read settings, spawing thread");
+            API.Log(API.LogType.Notice, "Read settings, spawing thread");
 #endif
             SpawnProcThread();
         }
@@ -54,7 +52,7 @@ namespace PluginExec
             string t = "-1";
             lock (locker)
             {
-                t = Measure.outputStr.ToString();
+                t = outputStr.ToString();
             }
             return t;
         }
@@ -69,7 +67,7 @@ namespace PluginExec
          */
         private void SpawnProcThread()
         {
-            Measure.outputStr.Remove(0, outputStr.Length);
+            outputStr.Remove(0, outputStr.Length);
             
             procThread = new Thread(delegate()
                 {
@@ -104,7 +102,7 @@ namespace PluginExec
         {
             lock (locker)
             {
-                Measure.outputStr.AppendLine(outLine.Data);
+                outputStr.AppendLine(outLine.Data);
             }
             
         }
